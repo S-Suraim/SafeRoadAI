@@ -95,6 +95,8 @@ if option == "📝 Describe Manually":
             if not matched_rows.empty:
                 st.subheader("✅ Recommended Road Safety Interventions")
                 st.dataframe(matched_rows)
+                st.info("⏱️ AI is analyzing your report using Gemini... This may take a few seconds.")
+
 
                 st.subheader("💡 AI Summary and Explanation")
                 with st.spinner("💡 Generating AI Summary... please wait ⏳"):
