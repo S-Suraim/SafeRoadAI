@@ -46,37 +46,39 @@ def find_matching_interventions(issues, df):
 # ========================
 def generate_ai_summary(issue_text, interventions_df):
     try:
-        # Extract only key issue lines
-        relevant_lines = []
-        for line in issue_text.split('\n'):
-            if re.search(r"(pothole|sign|crack|lighting|barrier|drain|curve|school|accident|shoulder)", line, re.I):
-                relevant_lines.append(line.strip())
+        import streamlit as st
+        import google.generativeai as genai
 
-        # Keep only top 5 relevant lines for faster generation
-        short_text = "\n".join(relevant_lines[:5])
+        # Configure Gemini safely (from Streamlit Cloud secrets)
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-        # Reduce intervention list to top 3 rows for brevity
-        small_df = interventions_df.head(3)
+        # Use a fast, lightweight model
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
-        # ✅ Use working model from your list
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
+        # Limit text size (avoid timeout)
+        if len(issue_text) > 4000:
+            issue_text = issue_text[:4000] + "\n...[Trimmed for summary]"
 
+        # Create concise prompt
         prompt = f"""
         You are a professional road safety engineer.
-        Summarize the road issue and propose 2–3 key interventions
-        using IRC standards mentioned below.
-
+        Based on the issue and interventions below, generate a clear, short, 
+        and technical summary suitable for a safety improvement report.
+        
         Road Issue:
-        {short_text}
+        {issue_text}
 
-        Matched Interventions:
-        {small_df.to_string(index=False)}
+        Recommended Interventions:
+        {interventions_df.to_string(index=False)}
 
-        Keep it concise (under 100 words), professional, and focused on road safety improvements.
+        Keep the summary within 150 words.
         """
 
-        with st.spinner("⚙️ Generating quick AI summary..."):
+        # Show spinner while generating
+        with st.spinner("🤖 Generating AI summary... please wait a few seconds"):
             response = model.generate_content(prompt)
+
+        # Return AI summary text
         return response.text if response and response.text else "No summary generated."
 
     except Exception as e:
