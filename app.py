@@ -46,19 +46,39 @@ def find_matching_interventions(issues, df):
 # ========================
 def generate_ai_summary(issue_text, interventions_df):
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
+        # Extract only key issue lines
+        relevant_lines = []
+        for line in issue_text.split('\n'):
+            if re.search(r"(pothole|sign|crack|lighting|barrier|drain|curve|school|accident|shoulder)", line, re.I):
+                relevant_lines.append(line.strip())
+
+        # Keep only top 5 relevant lines for faster generation
+        short_text = "\n".join(relevant_lines[:5])
+
+        # Reduce intervention list to top 3 rows for brevity
+        small_df = interventions_df.head(3)
+
+        # ✅ Use working model from your list
+        model = genai.GenerativeModel("models/gemini-2.5-flash")
+
         prompt = f"""
-You are a road safety engineer. Based on the described issue and interventions below,
-generate a professional explanation suitable for a safety improvement report.
+        You are a professional road safety engineer.
+        Summarize the road issue and propose 2–3 key interventions
+        using IRC standards mentioned below.
 
-Road Issue:
-{issue_text}
+        Road Issue:
+        {short_text}
 
-Matched Interventions:
-{interventions_df.to_string(index=False)}
-"""
-        response = model.generate_content(prompt)
+        Matched Interventions:
+        {small_df.to_string(index=False)}
+
+        Keep it concise (under 100 words), professional, and focused on road safety improvements.
+        """
+
+        with st.spinner("⚙️ Generating quick AI summary..."):
+            response = model.generate_content(prompt)
         return response.text if response and response.text else "No summary generated."
+
     except Exception as e:
         return f"⚠️ AI summary generation failed: {str(e)}"
 
