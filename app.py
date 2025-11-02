@@ -137,7 +137,13 @@ elif option == "📄 Upload PDF Report":
             st.dataframe(matched_rows)
 
             st.subheader("💡 AI Summary and Explanation")
-            ai_summary = generate_ai_summary(pdf_text, matched_rows)
+            # Limit the text length (e.g., 2000 characters)
+            limited_text = pdf_text[:2000]
+            with st.spinner("💡 Generating AI Summary... please wait ⏳"):
+                ai_summary = generate_ai_summary(limited_text, matched_rows)
+            st.success("✅ AI Summary Generated!")
+            st.write(ai_summary)
+            
             st.write(ai_summary)
         else:
             st.warning("No valid interventions found in the report.")
