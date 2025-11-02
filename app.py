@@ -97,8 +97,13 @@ if option == "📝 Describe Manually":
                 st.dataframe(matched_rows)
 
                 st.subheader("💡 AI Summary and Explanation")
-                ai_summary = generate_ai_summary(user_input, matched_rows)
+                with st.spinner("💡 Generating AI Summary... please wait ⏳"):
+                    ai_summary = generate_ai_summary(user_input, matched_rows)
+                st.success("✅ AI Summary Generated!")
                 st.write(ai_summary)
+
+
+              
             else:
                 st.warning("No valid interventions found for this issue.")
         else:
