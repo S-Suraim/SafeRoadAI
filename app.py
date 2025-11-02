@@ -53,7 +53,7 @@ def generate_ai_summary(issue_text, interventions_df):
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
         # Use a fast, lightweight model
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
 
         # Limit text size (avoid timeout)
         if len(issue_text) > 4000:
