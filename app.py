@@ -74,7 +74,7 @@ Upload a **PDF report** or **enter your issue manually**.
 
 # Load CSV
 try:
-    df = pd.read_csv("data\irc_interventions.csv")
+    df = pd.read_csv("data/irc_interventions.csv")
 except FileNotFoundError:
     st.error("❌ 'irc_interventions.csv' not found. Please make sure it's in the same folder as app.py.")
     st.stop()
