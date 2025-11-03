@@ -4,18 +4,34 @@ import re
 import streamlit as st
 from PyPDF2 import PdfReader
 import google.generativeai as genai
+import textwrap
 
-# ========================
-# 1️⃣ GEMINI CONFIGURATION
-# ========================
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+# =========================================================
+# 1️⃣ GEMINI CONFIGURATION — Safe for Local & Streamlit
+# =========================================================
+if "GOOGLE_API_KEY" in st.secrets:
+    API_KEY = st.secrets["GOOGLE_API_KEY"]
+else:
+    API_KEY = os.getenv("GOOGLE_API_KEY")
 
-MODEL_NAME = "models/gemini-2.5-flash"
+if not API_KEY:
+    st.error("❌ Google API Key not found.")
+    st.stop()
 
+genai.configure(api_key=API_KEY)
 
-# ========================
+# Try to load a valid model
+try:
+    available_models = [m.name for m in genai.list_models()]
+    MODEL_NAME = next((m for m in available_models if "gemini" in m.lower()), "models/gemini-pro")
+    model = genai.GenerativeModel(MODEL_NAME)
+except Exception as e:
+    st.warning(f"⚠️ Falling back to gemini-pro due to: {e}")
+    model = genai.GenerativeModel("models/gemini-pro")
+
+# =========================================================
 # 2️⃣ PDF TEXT EXTRACTION
-# ========================
+# =========================================================
 def extract_text_from_pdf(pdf_path):
     text = ""
     reader = PdfReader(pdf_path)
@@ -23,16 +39,16 @@ def extract_text_from_pdf(pdf_path):
         text += page.extract_text() + "\n"
     return text.strip()
 
-# ========================
+# =========================================================
 # 3️⃣ ISSUE EXTRACTION
-# ========================
+# =========================================================
 def extract_road_issues(text):
     pattern = r"(?i)(pothole|crack|sign|marking|lighting|barrier|shoulder|accident|flood|drain|school|curve|visibility|intersection)"
     return list(set(re.findall(pattern, text)))
 
-# ========================
+# =========================================================
 # 4️⃣ MATCH INTERVENTIONS
-# ========================
+# =========================================================
 def find_matching_interventions(issues, df):
     matches = []
     for issue in issues:
@@ -41,71 +57,51 @@ def find_matching_interventions(issues, df):
                 matches.append(row.to_dict())
     return pd.DataFrame(matches).drop_duplicates()
 
-# ========================
-# 5️⃣ AI SUMMARY (Gemini)
-# ========================
-def generate_ai_summary(issue_text, interventions_df):
+# =========================================================
+# 5️⃣ OPTIMIZED AI SUMMARY (Manual Trigger + Fast)
+# =========================================================
+def generate_ai_summary(text):
     try:
-        import streamlit as st
-        import google.generativeai as genai
-
-        # Configure Gemini safely (from Streamlit Cloud secrets)
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-
-        # Use a fast, lightweight model
-        model = genai.GenerativeModel("models/gemini-1.5-flash")
-
-        # Limit text size (avoid timeout)
-        if len(issue_text) > 4000:
-            issue_text = issue_text[:4000] + "\n...[Trimmed for summary]"
-
-        # Create concise prompt
+        short_text = text[:1500]
         prompt = f"""
-        You are a professional road safety engineer.
-        Based on the issue and interventions below, generate a clear, short, 
-        and technical summary suitable for a safety improvement report.
-        
-        Road Issue:
-        {issue_text}
-
-        Recommended Interventions:
-        {interventions_df.to_string(index=False)}
-
-        Keep the summary within 150 words.
+        Summarize the following road safety report in 5 bullet points.
+        Focus on detected issues, suggested improvements, and key safety actions.
+        Text:
+        {short_text}
         """
-
-        # Show spinner while generating
-        with st.spinner("🤖 Generating AI summary... please wait a few seconds"):
-            response = model.generate_content(prompt)
-
-        # Return AI summary text
-        return response.text if response and response.text else "No summary generated."
-
+        response = model.generate_content(prompt)
+        return textwrap.fill(response.text.strip(), width=100)
     except Exception as e:
-        return f"⚠️ AI summary generation failed: {str(e)}"
+        return f"⚠️ AI summary generation failed: {e}"
 
-# ========================
+# =========================================================
 # 6️⃣ STREAMLIT APP UI
-# ========================
+# =========================================================
 st.set_page_config(page_title="🚧 SafeRoad AI", page_icon="🚦", layout="wide")
 st.title("🚧 SafeRoad AI – Road Safety Intervention GPT")
+
 st.markdown("""
-Analyze road safety issues and get AI-powered intervention suggestions with explanations.
+Analyze road safety issues and get **AI-powered IRC-based intervention suggestions**.  
 Upload a **PDF report** or **enter your issue manually**.
 """)
 
-# Load CSV
+# =========================================================
+# 7️⃣ LOAD DATA
+# =========================================================
 try:
     df = pd.read_csv("data/irc_interventions.csv")
 except FileNotFoundError:
-    st.error("❌ 'irc_interventions.csv' not found. Please make sure it's in the same folder as app.py.")
+    st.error("❌ 'irc_interventions.csv' not found. Make sure it's in the `data/` folder.")
     st.stop()
 
+# =========================================================
+# 8️⃣ INPUT OPTION
+# =========================================================
 option = st.radio("Select Input Type:", ["📝 Describe Manually", "📄 Upload PDF Report"])
 
-# ========================
-# 7️⃣ MANUAL TEXT INPUT
-# ========================
+# ---------------------------------------------------------
+# Manual Input
+# ---------------------------------------------------------
 if option == "📝 Describe Manually":
     user_input = st.text_area("Describe the road safety issue:", height=150)
 
@@ -117,32 +113,30 @@ if option == "📝 Describe Manually":
             if not matched_rows.empty:
                 st.subheader("✅ Recommended Road Safety Interventions")
                 st.dataframe(matched_rows)
-                st.info("⏱️ AI is analyzing your report using Gemini... This may take a few seconds.")
-
 
                 st.subheader("💡 AI Summary and Explanation")
-                with st.spinner("💡 Generating AI Summary... please wait ⏳"):
-                    ai_summary = generate_ai_summary(user_input, matched_rows)
-                st.success("✅ AI Summary Generated!")
-                st.write(ai_summary)
-
-
-              
+                if st.button("🧠 Generate AI Summary"):
+                    with st.spinner("Generating AI summary... Please wait"):
+                        ai_summary = generate_ai_summary(user_input)
+                    st.success("✅ AI Summary Generated Successfully")
+                    st.text_area("AI Summary Output", ai_summary, height=250)
+                else:
+                    st.info("Click '🧠 Generate AI Summary' to generate AI explanation.")
             else:
                 st.warning("No valid interventions found for this issue.")
         else:
             st.warning("Please describe the road issue first.")
 
-# ========================
-# 8️⃣ PDF UPLOAD MODE
-# ========================
+# ---------------------------------------------------------
+# PDF Upload
+# ---------------------------------------------------------
 elif option == "📄 Upload PDF Report":
     uploaded_pdf = st.file_uploader("Upload PDF file", type=["pdf"])
+
     if uploaded_pdf:
         os.makedirs("uploads", exist_ok=True)
         uploaded_pdf_path = os.path.join("uploads", uploaded_pdf.name)
 
-        # Save the uploaded PDF
         with open(uploaded_pdf_path, "wb") as f:
             f.write(uploaded_pdf.getbuffer())
 
@@ -159,14 +153,12 @@ elif option == "📄 Upload PDF Report":
             st.dataframe(matched_rows)
 
             st.subheader("💡 AI Summary and Explanation")
-            # Limit the text length (e.g., 2000 characters)
-            limited_text = pdf_text[:2000]
-            with st.spinner("💡 Generating AI Summary... please wait ⏳"):
-                ai_summary = generate_ai_summary(limited_text, matched_rows)
-            st.success("✅ AI Summary Generated!")
-            st.write(ai_summary)
-            
-            st.write(ai_summary)
+            if st.button("🧠 Generate AI Summary"):
+                with st.spinner("Generating AI summary... Please wait"):
+                    ai_summary = generate_ai_summary(pdf_text)
+                st.success("✅ AI Summary Generated Successfully")
+                st.text_area("AI Summary Output", ai_summary, height=250)
+            else:
+                st.info("Click '🧠 Generate AI Summary' to generate AI explanation.")
         else:
             st.warning("No valid interventions found in the report.")
-            
