@@ -1,4 +1,4 @@
-# app_local.py — SafeRoad AI (Lovable + Premium UI)
+# SafeRoad AI 
 # Fully cleaned, no example buttons, no session_state errors.
 
 import os
